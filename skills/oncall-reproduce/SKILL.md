@@ -1,5 +1,5 @@
 ---
-name: django-reproduce
+name: oncall-reproduce
 description: Test-first reproduction — turn a bug into one minimal failing test in Django
 ---
 

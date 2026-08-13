@@ -1,5 +1,5 @@
 ---
-name: django-tracing
+name: oncall-tracing
 description: Trace a Django request end-to-end and add targeted logging to find the failure
 ---
 

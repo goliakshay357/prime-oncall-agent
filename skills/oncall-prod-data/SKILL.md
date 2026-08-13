@@ -1,5 +1,5 @@
 ---
-name: prod-data
+name: oncall-prod-data
 description: Prod data queries — Scylla/Redis/MySQL templates to hand the user for real incident data
 ---
 

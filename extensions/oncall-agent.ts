@@ -186,7 +186,18 @@ function errorResult(text: string) {
   return { content: [{ type: "text", text }], isError: true };
 }
 
+function isOncallEnabled(): boolean {
+  const v = process.env.ONCALL_ENABLED?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
 export default function oncallAgent(pi: ExtensionAPI) {
+  // Opt-in: the package is fully inert unless ONCALL_ENABLED is set. This keeps
+  // the on-call persona, tools, and commands out of every other session.
+  if (!isOncallEnabled()) {
+    return;
+  }
+
   const sync = () => {
     pi.appendEntry("oncall-state", { ...state });
     writeDashboardState();
