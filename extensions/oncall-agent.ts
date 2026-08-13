@@ -22,6 +22,7 @@ interface OncallState {
   finished: boolean;
   steered: boolean;
   history: Array<{ step: number; summary: string; at: number }>;
+  pendingData: Array<{ id: number; layer: string; query: string; why: string; at: number; resolved: boolean }>;
 }
 
 function freshState(): OncallState {
@@ -32,6 +33,7 @@ function freshState(): OncallState {
     finished: false,
     steered: false,
     history: [],
+    pendingData: [],
   };
 }
 
@@ -92,6 +94,7 @@ function writeDashboardState(): void {
       steps: STEPS.map((s) => ({ id: s.id, name: s.name, label: s.label, status: stepStatus(s.id) })),
     },
     history: state.history.slice(-20).map((h) => ({ step: h.step, summary: h.summary, at: h.at })),
+    pendingData: state.pendingData.slice(-20),
   };
   try {
     mkdirSync(dirname(dashPath()), { recursive: true });
@@ -142,7 +145,9 @@ Rules:
 - One step at a time. Never do two steps in one turn.
 - If confidence drops (a test shows your root cause is wrong), call checkpoint with the lower step number to reset and re-explore.
 - Always answer in plain English, as if to an engineer new to this codebase.
-- Keep a trial journal at .oncall/<sessionId>/trials.md. Before each new root-cause approach, check the journal and do NOT repeat a failed approach. After each attempt, log it via oncall_state.append_trial(approach=..., switched=..., how=..., result=..., verdict=...).`;
+- Keep a trial journal at .oncall/<sessionId>/trials.md. Before each new root-cause approach, check the journal and do NOT repeat a failed approach. After each attempt, log it via oncall_state.append_trial(approach=..., switched=..., how=..., result=..., verdict=...).
+- If you need a data point from the user (prod data, logs, a different repo, a sample payload), call request_data(action="ask", ...) and WAIT. You cannot complete a step while a data request is unanswered.
+- Accuracy is the only dealbreaker. Ultrathink and explore deeply; state a root cause or fix only at >=95% confidence. Explain in plain English, as if to someone new to the codebase.`;
 
 function buildStatePrompt(): string {
   const s = STEPS.find((x) => x.id === state.currentStep);
@@ -263,6 +268,14 @@ export default function oncallAgent(pi: ExtensionAPI) {
     async execute(_toolCallId, params) {
       const step = Math.round(params.step);
 
+      const unresolved = state.pendingData.filter((d) => !d.resolved);
+      if (unresolved.length > 0) {
+        const d = unresolved[0];
+        return errorResult(
+          `You have an unresolved data request (#${d.id}: ${d.layer} — ${d.query}). Get the answer from the user before completing or moving steps.`,
+        );
+      }
+
       if (step < state.currentStep) {
         state.currentStep = step;
         state.awaitingApproval = false;
@@ -303,6 +316,44 @@ export default function oncallAgent(pi: ExtensionAPI) {
       sync();
       return textResult(
         `Checkpoint recorded for step ${step}. STOP now. Show the user your deliverable and ask them to approve moving to step ${step + 1}. End your message with a question.`,
+      );
+    },
+  });
+
+  pi.registerTool({
+    name: "request_data",
+    label: "Request data (ask the human)",
+    description:
+      "Call this when you need a data point from the user to proceed: prod data, logs, a different repo, or a sample payload. You cannot complete the current step while the request is unanswered.",
+    parameters: Type.Object({
+      action: Type.String({ description: "Either 'ask' (record a new request) or 'resolve' (mark a request answered)." }),
+      layer: Type.Optional(Type.String({ description: "Where the data lives: scylla | redis | mysql | app | repo | other." })),
+      query: Type.Optional(Type.String({ description: "The exact query or artifact you need (SQL/CQL/Redis command, file path, payload)." })),
+      why: Type.Optional(Type.String({ description: "Why you need it — what it will prove or rule out." })),
+      id: Type.Optional(Type.Integer({ description: "Request number to resolve (for action='resolve')." })),
+    }),
+    async execute(_toolCallId, params) {
+      if (params.action === "resolve") {
+        const open = state.pendingData.filter((d) => !d.resolved);
+        const targetId = params.id ?? (open.length ? open[open.length - 1].id : 0);
+        const found = state.pendingData.find((d) => d.id === targetId && !d.resolved);
+        if (!found) return errorResult("No unresolved data request matches that id.");
+        found.resolved = true;
+        sync();
+        return textResult(`Data request #${targetId} resolved. You may continue.`);
+      }
+      const nextId = state.pendingData.reduce((m, d) => Math.max(m, d.id), 0) + 1;
+      state.pendingData.push({
+        id: nextId,
+        layer: params.layer ?? "other",
+        query: params.query ?? "",
+        why: params.why ?? "",
+        at: Date.now(),
+        resolved: false,
+      });
+      sync();
+      return textResult(
+        `Data request #${nextId} recorded (${params.layer ?? "other"}). STOP and ask the user for this data. You cannot complete the current step until it is provided. Show them the exact query/artifact.`,
       );
     },
   });

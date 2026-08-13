@@ -52,6 +52,13 @@
   .h-summary { color: var(--text); }
   .h-time { color: var(--muted); font-size: 11px; margin-left: auto; flex-shrink: 0; }
 
+    .datareq { margin-top: 12px; background: rgba(245,158,11,.08); border: 1px solid var(--awaiting); border-radius: 8px; padding: 10px 14px; }
+  .datareq .d-title { font-size: 11px; color: var(--awaiting); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
+  .d-item { font-size: 12px; padding: 3px 0; }
+  .d-layer { color: var(--awaiting); font-weight: 600; margin-right: 6px; }
+  .d-query { font-family: ui-monospace, Menlo, monospace; }
+  .d-why { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
   .empty { color: var(--muted); font-size: 13px; padding: 40px; text-align: center; border: 1px dashed var(--border); border-radius: 12px; }
   .footer { margin-top: 18px; font-size: 11px; color: var(--muted); }
 </style>
@@ -119,6 +126,15 @@
         '</div>'
       ).join("");
 
+      const openData = (s.pendingData || []).filter((d) => !d.resolved);
+      const dataHtml = openData.map((d) =>
+        '<div class="d-item">' +
+          '<span class="d-layer">[' + esc(d.layer || "data") + ']</span>' +
+          '<span class="d-query">' + esc(d.query || "") + '</span>' +
+          (d.why ? '<div class="d-why">why: ' + esc(d.why) + '</div>' : '') +
+        '</div>'
+      ).join("");
+
       return '<div class="session">' +
         '<div class="s-head">' +
           '<div class="s-title">' + esc(title(s)) + '<span class="sid">' + esc(sid) + '</span></div>' +
@@ -128,6 +144,7 @@
           '</div>' +
         '</div>' +
         (s.activity ? '<div class="activity"><span class="tag">Now:</span> ' + esc(s.activity) + '</div>' : '') +
+        (dataHtml ? '<div class="datareq"><div class="d-title">Needs data from you</div>' + dataHtml + '</div>' : '') +
         '<div class="steps">' + stepsHtml + '</div>' +
         (histHtml ? '<div class="history"><div class="h-title">Checkpoints</div>' + histHtml + '</div>' : '') +
         (trialsHtml ? '<div class="history"><div class="h-title">Trials (root-cause attempts)</div>' + trialsHtml + '</div>' : '') +
