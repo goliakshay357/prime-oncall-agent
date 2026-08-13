@@ -28,7 +28,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path in ("/", "/index.html"):
             self._send(200, (DASH_DIR / "index.html").read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/state":
-            self._send(200, json.dumps(oncall_state.load()).encode(), "application/json")
+            self._send(200, json.dumps({"sessions": oncall_state.list_sessions()}).encode(), "application/json")
         else:
             self._send(404, b"not found", "text/plain")
 
@@ -36,7 +36,12 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+class ReusableThreadingTCPServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
 if __name__ == "__main__":
-    with socketserver.ThreadingTCPServer(("127.0.0.1", PORT), Handler) as httpd:
+    with ReusableThreadingTCPServer(("127.0.0.1", PORT), Handler) as httpd:
         print(f"On-call dashboard: http://127.0.0.1:{PORT}")
         httpd.serve_forever()

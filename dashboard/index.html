@@ -6,49 +6,54 @@
 <title>On-Call Agent &mdash; Status</title>
 <style>
   :root {
-    --bg: #0b1220;
-    --panel: #111a2e;
-    --border: #1e2a44;
-    --text: #e6edf6;
-    --muted: #8b98ad;
-    --pending: #3a465c;
-    --in-progress: #3b82f6;
-    --awaiting: #f59e0b;
-    --done: #22c55e;
-    --blocked: #ef4444;
+    --bg: #0b1220; --panel: #111a2e; --border: #1e2a44; --text: #e6edf6; --muted: #8b98ad;
+    --pending: #3a465c; --in-progress: #3b82f6; --awaiting: #f59e0b; --done: #22c55e; --blocked: #ef4444;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 28px 32px;
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg); color: var(--text);
-  }
-  header { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; justify-content: space-between; margin-bottom: 22px; }
+  body { margin: 0; padding: 28px 32px; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 22px; }
   h1 { font-size: 18px; margin: 0; font-weight: 600; }
   .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
-  .meta { display: flex; gap: 28px; align-items: flex-end; }
-  .bug { font-size: 13px; }
-  .bug .tag { color: var(--muted); font-size: 11px; }
-  .confidence { width: 240px; }
+  .count { font-size: 12px; color: var(--muted); }
+
+  .sessions { display: flex; flex-direction: column; gap: 16px; }
+  .session { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .s-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; }
+  .s-title { font-size: 15px; font-weight: 600; }
+  .s-title .sid { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 8px; }
+  .confidence { width: 220px; }
   .confidence .label { font-size: 11px; color: var(--muted); margin-bottom: 5px; display: flex; justify-content: space-between; }
-  .confidence .bar { height: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-  .confidence .fill { height: 100%; background: var(--in-progress); transition: width .35s ease; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
-  .step { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 15px 16px; }
-  .step .num { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
-  .step .label { font-size: 13px; margin-top: 7px; line-height: 1.35; min-height: 34px; }
-  .badge { display: inline-block; margin-top: 12px; font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid; }
-  .status-pending     { border-left: 3px solid var(--pending); }
+  .confidence .bar { height: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .confidence .fill { height: 100%; background: var(--in-progress); transition: width .35s; }
+  .activity { margin-top: 8px; font-size: 12px; color: var(--text); }
+  .activity .tag { color: var(--muted); }
+
+  .steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 14px; }
+  .step { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .step .num { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .step .name { font-size: 12px; margin-top: 5px; line-height: 1.25; }
+  .badge { display: inline-block; margin-top: 8px; font-size: 10px; padding: 2px 7px; border-radius: 999px; border: 1px solid; }
+
+  .status-pending { border-left: 3px solid var(--pending); }
   .status-in_progress { border-left: 3px solid var(--in-progress); }
   .status-awaiting_approval { border-left: 3px solid var(--awaiting); }
-  .status-done        { border-left: 3px solid var(--done); }
-  .status-blocked     { border-left: 3px solid var(--blocked); }
-  .badge-pending     { color: var(--muted);    border-color: var(--pending); }
+  .status-done { border-left: 3px solid var(--done); }
+  .status-blocked { border-left: 3px solid var(--blocked); }
+  .badge-pending { color: var(--muted); border-color: var(--pending); }
   .badge-in_progress { color: var(--in-progress); border-color: var(--in-progress); }
   .badge-awaiting_approval { color: var(--awaiting); border-color: var(--awaiting); }
-  .badge-done        { color: var(--done);    border-color: var(--done); }
-  .badge-blocked     { color: var(--blocked); border-color: var(--blocked); }
-  .footer { margin-top: 18px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+  .badge-done { color: var(--done); border-color: var(--done); }
+  .badge-blocked { color: var(--blocked); border-color: var(--blocked); }
+
+  .history { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .history .h-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
+  .h-item { display: flex; gap: 10px; font-size: 12px; padding: 3px 0; }
+  .h-step { color: var(--muted); font-family: ui-monospace, Menlo, monospace; flex-shrink: 0; }
+  .h-summary { color: var(--text); }
+  .h-time { color: var(--muted); font-size: 11px; margin-left: auto; flex-shrink: 0; }
+
+  .empty { color: var(--muted); font-size: 13px; padding: 40px; text-align: center; border: 1px dashed var(--border); border-radius: 12px; }
+  .footer { margin-top: 18px; font-size: 11px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -57,31 +62,14 @@
       <h1>On-Call Agent</h1>
       <div class="sub">Live status &mdash; refreshes every second</div>
     </div>
-    <div class="meta">
-      <div class="bug"><span class="tag">Bug:</span> <span id="bug">&mdash;</span></div>
-      <div class="confidence">
-        <div class="label"><span>Root-cause confidence</span><span id="confText">0%</span></div>
-        <div class="bar"><div class="fill" id="confFill" style="width:0%"></div></div>
-      </div>
-    </div>
+    <div class="count" id="count">&mdash;</div>
   </header>
 
-  <div class="grid" id="grid"></div>
-
-  <div class="footer">
-    <span id="progress">0 / 0 done</span>
-    <span id="updated">&mdash;</span>
-  </div>
+  <div class="sessions" id="content"></div>
+  <div class="footer" id="updated">&mdash;</div>
 
   <script>
-    const STATUS_TEXT = {
-      pending: "Pending",
-      in_progress: "In progress",
-      awaiting_approval: "Awaiting approval",
-      done: "Done",
-      blocked: "Blocked",
-    };
-    const grid = document.getElementById("grid");
+    const STATUS_TEXT = { pending: "Pending", in_progress: "In progress", awaiting_approval: "Awaiting approval", done: "Done", blocked: "Blocked" };
 
     function esc(s) {
       return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -94,35 +82,66 @@
       if (m < 60) return m + "m ago";
       return Math.floor(m / 60) + "h ago";
     }
+    function title(s) {
+      return s.bug || s.sessionName || ("Session " + (s.sessionId || "").slice(0, 8));
+    }
 
-    function render(state) {
-      const wf = state.workflow || {};
-      document.getElementById("bug").textContent = state.bug || "—";
-      const conf = wf.rootCauseConfidence ?? 0;
-      document.getElementById("confText").textContent = conf + "%";
-      document.getElementById("confFill").style.width = conf + "%";
-      document.getElementById("confFill").style.background = conf >= 95 ? "var(--done)" : "var(--in-progress)";
-
+    function renderSession(s) {
+      const wf = s.workflow || {};
       const steps = wf.steps || [];
-      grid.innerHTML = steps.map((s) => {
-        const st = s.status || "pending";
-        return '<div class="step status-' + st + '">' +
-          '<div class="num">Step ' + s.id + '</div>' +
-          '<div class="label">' + esc(s.label) + '</div>' +
-          '<span class="badge badge-' + st + '">' + (STATUS_TEXT[st] || st) + '</span>' +
+      const conf = wf.rootCauseConfidence ?? 0;
+      const history = (s.history || []).slice(-5).reverse();
+      const sid = (s.sessionId || "").slice(0, 8);
+
+      const stepsHtml = steps.map((st) => {
+        const status = st.status || "pending";
+        return '<div class="step status-' + status + '" title="Step ' + st.id + ': ' + esc(st.label) + '">' +
+          '<div class="num">Step ' + st.id + '</div>' +
+          '<div class="name">' + esc(st.name) + '</div>' +
+          '<span class="badge badge-' + status + '">' + (STATUS_TEXT[status] || status) + '</span>' +
         '</div>';
       }).join("");
 
-      const done = steps.filter((s) => s.status === "done").length;
-      document.getElementById("progress").textContent = done + " / " + steps.length + " done";
-      document.getElementById("updated").textContent =
-        "updated " + timeAgo(state.updatedAt) + " · source: " + (state.source || "—");
+      const histHtml = history.map((h) =>
+        '<div class="h-item">' +
+          '<span class="h-step">S' + h.step + '</span>' +
+          '<span class="h-summary">' + esc(h.summary || "") + '</span>' +
+          '<span class="h-time">' + timeAgo(h.at) + '</span>' +
+        '</div>'
+      ).join("");
+
+      return '<div class="session">' +
+        '<div class="s-head">' +
+          '<div class="s-title">' + esc(title(s)) + '<span class="sid">' + esc(sid) + '</span></div>' +
+          '<div class="confidence">' +
+            '<div class="label"><span>Confidence</span><span>' + conf + '%</span></div>' +
+            '<div class="bar"><div class="fill" style="width:' + conf + '%;background:' + (conf >= 95 ? 'var(--done)' : 'var(--in-progress)') + '"></div></div>' +
+          '</div>' +
+        '</div>' +
+        (s.activity ? '<div class="activity"><span class="tag">Now:</span> ' + esc(s.activity) + '</div>' : '') +
+        '<div class="steps">' + stepsHtml + '</div>' +
+        (histHtml ? '<div class="history"><div class="h-title">Checkpoints</div>' + histHtml + '</div>' : '') +
+      '</div>';
+    }
+
+    function render(sessions) {
+      const content = document.getElementById("content");
+      document.getElementById("count").textContent = sessions.length
+        ? sessions.length + " active session" + (sessions.length > 1 ? "s" : "")
+        : "no active sessions";
+      if (!sessions.length) {
+        content.innerHTML = '<div class="empty">No active sessions &mdash; start an on-call bug fix and this screen will populate.</div>';
+        return;
+      }
+      content.innerHTML = sessions.map(renderSession).join("");
     }
 
     async function tick() {
       try {
         const res = await fetch("/state", { cache: "no-store" });
-        render(await res.json());
+        const data = await res.json();
+        render(data.sessions || []);
+        document.getElementById("updated").textContent = "live";
       } catch (e) {
         document.getElementById("updated").textContent = "offline — server not reachable";
       }

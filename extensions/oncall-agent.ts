@@ -40,21 +40,31 @@ function clampConfidence(n: number): number {
 }
 
 let state: OncallState = freshState();
+let sessionId = "unknown";
+let sessionName = "";
 
-// Dashboard mirror — a single state.json that the dashboard polls. The extension
-// owns workflow.*; the IPython kernel owns bug/telemetry. Both preserve the
-// other's fields via read-modify-write on this one file.
-const DASH_PATH = join(
-  process.env.ONCALL_STATE_DIR ?? join(homedir(), ".prime", "agent", "oncall"),
-  "state.json",
-);
+// ─── Dashboard mirror ───
+// One JSON file per session: <state-dir>/<sessionId>.json. The extension owns
+// workflow/history; the IPython kernel owns bug/activity and other display
+// fields. Both read-modify-write and preserve the other's fields.
+function stateDir(): string {
+  return process.env.ONCALL_STATE_DIR ?? join(homedir(), ".prime", "agent", "oncall");
+}
 
-function readExistingBug(): string {
+function dashPath(): string {
+  return join(stateDir(), `${sessionId}.json`);
+}
+
+function readExistingDash(): Record<string, unknown> {
   try {
-    return JSON.parse(readFileSync(DASH_PATH, "utf8"))?.bug ?? "";
+    return JSON.parse(readFileSync(dashPath(), "utf8"));
   } catch {
-    return "";
+    return {};
   }
+}
+
+function firstBugSummary(): string {
+  return state.history.find((h) => h.step === 1)?.summary ?? "";
 }
 
 function stepStatus(id: number): string {
@@ -65,11 +75,15 @@ function stepStatus(id: number): string {
 }
 
 function writeDashboardState(): void {
+  const existing = readExistingDash();
   const payload = {
+    ...existing,
     version: 1,
     updatedAt: Date.now(),
     source: "extension",
-    bug: readExistingBug(),
+    sessionId,
+    sessionName,
+    bug: (existing.bug as string) || firstBugSummary(),
     workflow: {
       currentStep: state.currentStep,
       awaitingApproval: state.awaitingApproval,
@@ -77,12 +91,13 @@ function writeDashboardState(): void {
       finished: state.finished,
       steps: STEPS.map((s) => ({ id: s.id, name: s.name, label: s.label, status: stepStatus(s.id) })),
     },
+    history: state.history.slice(-20).map((h) => ({ step: h.step, summary: h.summary, at: h.at })),
   };
   try {
-    mkdirSync(dirname(DASH_PATH), { recursive: true });
-    const tmp = `${DASH_PATH}.tmp`;
+    mkdirSync(dirname(dashPath()), { recursive: true });
+    const tmp = `${dashPath()}.tmp`;
     writeFileSync(tmp, JSON.stringify(payload, null, 2));
-    renameSync(tmp, DASH_PATH);
+    renameSync(tmp, dashPath());
   } catch {
     // The dashboard is optional. Never break the agent because of a file write.
   }
@@ -172,6 +187,8 @@ export default function oncallAgent(pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    sessionId = ctx.sessionManager.getSessionId() ?? "unknown";
+    sessionName = ctx.sessionManager.getSessionName() ?? "";
     const entries = ctx.sessionManager.getEntries();
     const last = entries
       .filter((e: any) => e.type === "custom" && e.customType === "oncall-state")
@@ -287,6 +304,7 @@ export default function oncallAgent(pi: ExtensionAPI) {
       const s = STEPS.find((x) => x.id === state.currentStep);
       const lines = [
         `On-call agent — step ${state.currentStep} of ${STEPS.length}: ${s?.label ?? "?"}`,
+        `Session: ${sessionId}`,
         `Confidence: ${state.rootCauseConfidence}%`,
         state.finished ? "Status: all done." : state.awaitingApproval ? "Status: awaiting your approval." : "Status: in progress.",
       ];
