@@ -103,6 +103,26 @@ function writeDashboardState(): void {
   }
 }
 
+function readTrials(): Array<Record<string, unknown>> {
+  try {
+    return (JSON.parse(readFileSync(dashPath(), "utf8"))?.trials as Array<Record<string, unknown>>) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function buildTrialPrompt(): string {
+  const trials = readTrials();
+  if (trials.length === 0) return "";
+  const lines = ["## Trial Journal", "Do not repeat a failed approach. Build confidence with data-driven trials until >=95%."];
+  for (const t of trials.slice(-10)) {
+    const verdict = String(t.verdict ?? "");
+    const failed = /fail|ruled out|not the cause|wrong|didn'?t|no\b/i.test(verdict) ? " — FAILED, do not repeat" : "";
+    lines.push(`- Attempt ${t.attempt}: ${t.approach} → ${verdict}${failed}`);
+  }
+  return lines.join("\n");
+}
+
 const PERSONA = `You are a senior principal engineer fixing a production bug with human-in-the-loop checkpoints.
 You pause and wait for approval at every step. Never skip a stop.
 
@@ -121,7 +141,8 @@ How to advance: at the end of each step, call the checkpoint tool with your deli
 Rules:
 - One step at a time. Never do two steps in one turn.
 - If confidence drops (a test shows your root cause is wrong), call checkpoint with the lower step number to reset and re-explore.
-- Always answer in plain English, as if to an engineer new to this codebase.`;
+- Always answer in plain English, as if to an engineer new to this codebase.
+- Keep a trial journal at .oncall/<sessionId>/trials.md. Before each new root-cause approach, check the journal and do NOT repeat a failed approach. After each attempt, log it via oncall_state.append_trial(approach=..., switched=..., how=..., result=..., verdict=...).`;
 
 function buildStatePrompt(): string {
   const s = STEPS.find((x) => x.id === state.currentStep);
@@ -183,7 +204,7 @@ export default function oncallAgent(pi: ExtensionAPI) {
   };
 
   pi.on("before_agent_start", async (event) => {
-    return { systemPrompt: PERSONA + "\n\n" + buildStatePrompt() + "\n\n" + event.systemPrompt };
+    return { systemPrompt: PERSONA + "\n\n" + buildStatePrompt() + "\n\n" + buildTrialPrompt() + "\n\n" + event.systemPrompt };
   });
 
   pi.on("session_start", async (_event, ctx) => {
@@ -267,6 +288,11 @@ export default function oncallAgent(pi: ExtensionAPI) {
         if (confidence < 95 && !params.proceedAnyway) {
           return errorResult(
             `Confidence is ${confidence}%, below 95%. You cannot pass step 3 unless the user explicitly says "proceed anyway". If they said that, call checkpoint again with proceedAnyway: true.`,
+          );
+        }
+        if (readTrials().length < 1) {
+          return errorResult(
+            "You must log at least one trial in the journal (oncall_state.append_trial(...)) before passing step 3. Build confidence with data-driven trials, not guesses.",
           );
         }
       }

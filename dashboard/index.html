@@ -110,6 +110,15 @@
         '</div>'
       ).join("");
 
+      const trials = (s.trials || []).slice(-6).reverse();
+      const trialsHtml = trials.map((t) =>
+        '<div class="h-item">' +
+          '<span class="h-step">#' + t.attempt + '</span>' +
+          '<span class="h-summary">' + esc(t.approach) + ' → ' + esc(t.verdict || "") + '</span>' +
+          '<span class="h-time">' + timeAgo(t.at) + '</span>' +
+        '</div>'
+      ).join("");
+
       return '<div class="session">' +
         '<div class="s-head">' +
           '<div class="s-title">' + esc(title(s)) + '<span class="sid">' + esc(sid) + '</span></div>' +
@@ -121,6 +130,7 @@
         (s.activity ? '<div class="activity"><span class="tag">Now:</span> ' + esc(s.activity) + '</div>' : '') +
         '<div class="steps">' + stepsHtml + '</div>' +
         (histHtml ? '<div class="history"><div class="h-title">Checkpoints</div>' + histHtml + '</div>' : '') +
+        (trialsHtml ? '<div class="history"><div class="h-title">Trials (root-cause attempts)</div>' + trialsHtml + '</div>' : '') +
       '</div>';
     }
 

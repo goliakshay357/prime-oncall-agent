@@ -107,6 +107,48 @@ def set_activity(text: str) -> dict:
     return update(activity=str(text))
 
 
+def journal_dir() -> Path:
+    root = Path(os.environ.get("ONCALL_JOURNAL_ROOT", os.getcwd()))
+    return root / ".oncall" / session_key()
+
+
+def journal_path() -> Path:
+    return journal_dir() / "trials.md"
+
+
+def append_trial(approach, switched="", how="", result="", verdict="") -> dict:
+    """Append one root-cause attempt to the journal. Writes BOTH:
+       - state.json "trials" (structured, for the dashboard + extension gate)
+       - .oncall/<sessionId>/trials.md (human-readable journal)
+    """
+    state = load()
+    trials = state.setdefault("trials", [])
+    entry = {
+        "attempt": len(trials) + 1,
+        "approach": str(approach),
+        "switched": str(switched),
+        "how": str(how),
+        "result": str(result),
+        "verdict": str(verdict),
+        "at": int(time.time() * 1000),
+    }
+    trials.append(entry)
+    state["source"] = "kernel"
+    save(state)
+
+    path = journal_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        f.write(f"## Attempt #{entry['attempt']}\n")
+        f.write(f"- Approach: {entry['approach']}\n")
+        f.write(f"- Switched: {entry['switched'] or '-'}\n")
+        f.write(f"- How: {entry['how'] or '-'}\n")
+        f.write(f"- Result: {entry['result'] or '-'}\n")
+        f.write(f"- Verdict: {entry['verdict'] or '-'}\n")
+        f.write("\n")
+    return entry
+
+
 def list_sessions() -> list[dict]:
     """Return all session state files, newest first. Used by the dashboard server."""
     sessions = []
