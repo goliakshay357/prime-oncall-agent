@@ -1,0 +1,32 @@
+{
+  "name": "prime-oncall-agent",
+  "version": "0.1.0",
+  "description": "On-call bug-fix agent for Prime Agent \u2014 human-in-the-loop checkpoints, confidence scoring, and blast-radius analysis.",
+  "keywords": [
+    "pi-package",
+    "oncall",
+    "sre",
+    "incident",
+    "bug-fix"
+  ],
+  "author": "",
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  }
+}
