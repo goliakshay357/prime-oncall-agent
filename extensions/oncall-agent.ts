@@ -3,6 +3,9 @@ import { Type } from "typebox";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { spawn } from "node:child_process";
+import { connect } from "node:net";
+import { fileURLToPath } from "node:url";
 
 const STEPS = [
   { id: 1, name: "understand", label: "Understand the bug" },
@@ -129,6 +132,12 @@ function buildTrialPrompt(): string {
 const PERSONA = `You are a senior principal engineer fixing a production bug with human-in-the-loop checkpoints.
 You pause and wait for approval at every step. Never skip a stop.
 
+YOUR FIRST ACTION — before reading, searching, or touching any code:
+1. Restate the bug in your own words (observed vs expected behavior, impact, what you still do not know).
+2. List the gaps and unknowns.
+3. Ask the user for anything you need (data, repro steps, clarification).
+Then call the checkpoint tool for step 1 and STOP. Do not explore code until step 1 is approved.
+
 The 8 steps:
 1. Understand the bug — restate observed vs expected behavior, impact, unknowns.
 2. Explore the codebase — trace entry points, call path, data flow, recent changes; form a root-cause hypothesis with evidence and a confidence number.
@@ -186,18 +195,33 @@ function errorResult(text: string) {
   return { content: [{ type: "text", text }], isError: true };
 }
 
-function isOncallEnabled(): boolean {
-  const v = process.env.ONCALL_ENABLED?.trim().toLowerCase();
+let active = false;
+
+function envFlag(name: string): boolean {
+  const v = process.env[name]?.trim().toLowerCase();
   return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
-export default function oncallAgent(pi: ExtensionAPI) {
-  // Opt-in: the package is fully inert unless ONCALL_ENABLED is set. This keeps
-  // the on-call persona, tools, and commands out of every other session.
-  if (!isOncallEnabled()) {
-    return;
-  }
+function detectBugSignal(text: string): boolean {
+  const t = (text || "").toLowerCase();
+  return /bug|error|exception|crash|timeout|incident|issue|broken|down|failing|regression|outage|stack ?trace|traceback|500|502|503|504|prod|production|alert|on-?call|slack|ticket/.test(t);
+}
 
+function autoStartDashboard(): void {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const server = join(here, "..", "dashboard", "server.py");
+    const probe = connect({ port: 8787, host: "127.0.0.1" });
+    probe.on("connect", () => probe.end());
+    probe.on("error", () => {
+      spawn("python3", [server], { detached: true, stdio: "ignore" }).unref();
+    });
+  } catch {
+    // best-effort: the dashboard can always be started manually
+  }
+}
+
+export default function oncallAgent(pi: ExtensionAPI) {
   const sync = () => {
     pi.appendEntry("oncall-state", { ...state });
     writeDashboardState();
@@ -220,6 +244,13 @@ export default function oncallAgent(pi: ExtensionAPI) {
   };
 
   pi.on("before_agent_start", async (event) => {
+    if (envFlag("ONCALL_DISABLED")) return {};
+    if (!active && (envFlag("ONCALL_ENABLED") || detectBugSignal(event.prompt))) {
+      active = true;
+      writeDashboardState();
+      autoStartDashboard();
+    }
+    if (!active) return {};
     return { systemPrompt: PERSONA + "\n\n" + buildStatePrompt() + "\n\n" + buildTrialPrompt() + "\n\n" + event.systemPrompt };
   });
 
@@ -231,7 +262,7 @@ export default function oncallAgent(pi: ExtensionAPI) {
       .filter((e: any) => e.type === "custom" && e.customType === "oncall-state")
       .pop() as { data?: OncallState } | undefined;
     state = last?.data ? { ...freshState(), ...last.data } : freshState();
-    writeDashboardState();
+    if (active) writeDashboardState();
   });
 
   pi.on("session_shutdown", async () => {
@@ -239,6 +270,7 @@ export default function oncallAgent(pi: ExtensionAPI) {
   });
 
   pi.on("turn_end", async (event) => {
+    if (!active) return;
     if (event.message.role !== "assistant") return;
     if (!state.awaitingApproval || state.steered) return;
     const text = event.message.content
@@ -255,6 +287,7 @@ export default function oncallAgent(pi: ExtensionAPI) {
   });
 
   pi.on("input", async (event) => {
+    if (!active) return { action: "continue" };
     if (!state.awaitingApproval) return { action: "continue" };
     if (event.source === "extension") return { action: "continue" };
     const verdict = detectApproval(event.text);
@@ -277,6 +310,7 @@ export default function oncallAgent(pi: ExtensionAPI) {
       ),
     }),
     async execute(_toolCallId, params) {
+      if (!active) return errorResult("On-call mode is not active. Describe a bug or incident to activate it.");
       const step = Math.round(params.step);
 
       const unresolved = state.pendingData.filter((d) => !d.resolved);
@@ -344,6 +378,7 @@ export default function oncallAgent(pi: ExtensionAPI) {
       id: Type.Optional(Type.Integer({ description: "Request number to resolve (for action='resolve')." })),
     }),
     async execute(_toolCallId, params) {
+      if (!active) return errorResult("On-call mode is not active. Describe a bug or incident to activate it.");
       if (params.action === "resolve") {
         const open = state.pendingData.filter((d) => !d.resolved);
         const targetId = params.id ?? (open.length ? open[open.length - 1].id : 0);
@@ -372,6 +407,10 @@ export default function oncallAgent(pi: ExtensionAPI) {
   pi.registerCommand("oncall", {
     description: "On-call agent status and controls",
     handler: async (args, ctx) => {
+      if (!active) {
+        ctx.ui.notify("On-call mode is not active. Describe a bug or incident to activate it.", "info");
+        return;
+      }
       const arg = args.trim();
       if (arg === "approve") {
         approveStep();
